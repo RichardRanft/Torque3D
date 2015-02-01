@@ -23,7 +23,9 @@
 project(${TORQUE_APP_NAME})
 
 if(UNIX)
-    set(CXX_FLAG32 "")
+    if(NOT CXX_FLAG32)
+        set(CXX_FLAG32 "")
+    endif()
     #set(CXX_FLAG32 "-m32") #uncomment for build x32 on OSx64
     
     # default compiler flags
@@ -73,34 +75,13 @@ if(WIN32)
 else()
 	set(TORQUE_OPENGL ON) # we need OpenGL to render on Linux/Mac
 endif()
-option(TORQUE_NAVIGATION "Enable Navigation module" OFF)
-#mark_as_advanced(TORQUE_NAVIGATION)
-option(TORQUE_TESTING "Enable unit test module" OFF)
-mark_as_advanced(TORQUE_TESTING)
+
 if(WIN32)
 	option(TORQUE_OPENGL "Allow OpenGL render" OFF)
 	#mark_as_advanced(TORQUE_OPENGL)
 else()
 	set(TORQUE_OPENGL ON) # we need OpenGL to render on Linux/Mac
 	option(TORQUE_DEDICATED "Torque dedicated" OFF)
-endif()
-
-#Oculus VR
-option(TORQUE_OCULUSVR "Enable OCULUSVR module" OFF)
-mark_as_advanced(TORQUE_OCULUSVR)
-if(TORQUE_OCULUSVR)
-    set(TORQUE_OCULUSVR_SDK_PATH "" CACHE PATH "OCULUSVR library path" FORCE)
-else() # hide variable
-    set(TORQUE_OCULUSVR_SDK_PATH "" CACHE INTERNAL "" FORCE) 
-endif()
-
-#Hydra
-option(TORQUE_HYDRA "Enable HYDRA module" OFF)
-mark_as_advanced(TORQUE_HYDRA)
-if(TORQUE_HYDRA)
-    set(TORQUE_HYDRA_SDK_PATH "" CACHE PATH "HYDRA library path" FORCE)
-else() # hide variable
-    set(TORQUE_HYDRA_SDK_PATH "" CACHE INTERNAL "" FORCE) 
 endif()
 
 ###############################################################################
@@ -385,28 +366,15 @@ if(TORQUE_SDL)
     add_subdirectory( ${libDir}/sdl ${CMAKE_CURRENT_BINARY_DIR}/sdl2)
 endif()
 
-if(TORQUE_TESTING)
-   include( "modules/module_testing.cmake" )
-endif()
-
-if(TORQUE_NAVIGATION)
-   include( "modules/module_navigation.cmake" )
-endif()
-
-if(TORQUE_OCULUSVR)
-    include( "modules/module_oculusVR.cmake" )
-endif()
-
-if(TORQUE_HYDRA)
-    include( "modules/module_hydra.cmake" )
-endif()
-
 if(TORQUE_DEDICATED)
     addDef(TORQUE_DEDICATED)
 endif()
 
-include( "modules/module_testing.cmake" )
-
+#modules dir
+file(GLOB modules "modules/*.cmake")
+foreach(module ${modules})
+	include(${module})
+endforeach()
 
 ###############################################################################
 # platform specific things
