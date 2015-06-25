@@ -123,11 +123,16 @@ IMPLEMENT_CALLBACK( ScriptTickObject, onAdvanceTime, void, ( F32 timeDelta ), ( 
 ScriptTickObject::ScriptTickObject()
 {
    mCallOnAdvanceTime = false;
+   mUseTickRateMs = false;
+   mTickRateMs = 32;
+   mAccumulator = 0.0;
 }
 
 void ScriptTickObject::initPersistFields()
 {
-   addField("callOnAdvanceTime", TypeBool,   Offset(mCallOnAdvanceTime,  ScriptTickObject), "Call the onAdvaceTime() callback.");
+   addField("callOnAdvanceTime", TypeBool,   Offset(mCallOnAdvanceTime,  ScriptTickObject), "Call the onAdvanceTime() callback.");
+   addField("useTickRateMs", TypeBool,   Offset(mUseTickRateMs,  ScriptTickObject), "Use milliseconds between callbacks instead of one per tick.");
+   addField("tickRateMs", TypeS32,   Offset(mTickRateMs,  ScriptTickObject), "Time in milliseconds between callbacks.");
 
    Parent::initPersistFields();
 }
@@ -147,12 +152,33 @@ void ScriptTickObject::onRemove()
 
 void ScriptTickObject::interpolateTick( F32 delta )
 {
-   onInterpolateTick_callback(delta);
+	if(mUseTickRateMs)
+	{
+		// Calc time
+		if(mAccumulator > mTickRateMs)
+		{
+			mAccumulator = 0.0;
+			onInterpolateTick_callback(delta);
+		}
+		mAccumulator += delta;
+	}
+	else
+		onInterpolateTick_callback(delta);
 }
 
 void ScriptTickObject::processTick()
 {
-   onProcessTick_callback();
+
+	if(mUseTickRateMs)
+	{
+		// Calc time
+		if(mAccumulator > mTickRateMs)
+		{
+			onProcessTick_callback();
+		}
+	}
+	else
+		onProcessTick_callback();
 }
 
 void ScriptTickObject::advanceTime( F32 timeDelta )
