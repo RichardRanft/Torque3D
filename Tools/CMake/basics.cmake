@@ -71,6 +71,9 @@ macro(addPath dir)
              ${dir}/*.h
              #${dir}/*.asm
              )
+    foreach(entry ${BLACKLIST})
+ 		list(REMOVE_ITEM tmp_files ${dir}/${entry})
+ 	endforeach()
     LIST(APPEND ${PROJECT_NAME}_files "${tmp_files}")
     LIST(APPEND ${PROJECT_NAME}_paths "${dir}")
     #message(STATUS "addPath ${PROJECT_NAME} : ${tmp_files}")
@@ -393,6 +396,7 @@ endif()
 
 # fix the debug/release subfolders on windows
 if(MSVC)
+    SET("CMAKE_RUNTIME_OUTPUT_DIRECTORY" "${projectOutDir}")
     FOREACH(CONF ${CMAKE_CONFIGURATION_TYPES})
         # Go uppercase (DEBUG, RELEASE...)
         STRING(TOUPPER "${CONF}" CONF)
