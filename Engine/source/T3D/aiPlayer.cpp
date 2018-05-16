@@ -160,7 +160,7 @@ void AIPlayer::initPersistFields()
       addField("allowDrop", TypeBool, Offset(mLinkTypes.drop, AIPlayer),
          "Allow the character to use drop links.");
       addField("allowSwim", TypeBool, Offset(mLinkTypes.swim, AIPlayer),
-         "Allow the character tomove in water.");
+         "Allow the character to move in water.");
       addField("allowLedge", TypeBool, Offset(mLinkTypes.ledge, AIPlayer),
          "Allow the character to jump ledges.");
       addField("allowClimb", TypeBool, Offset(mLinkTypes.climb, AIPlayer),
@@ -291,6 +291,30 @@ void AIPlayer::clearAim()
    mAimObject = 0;
    mAimLocationSet = false;
    mAimOffset = Point3F(0.0f, 0.0f, 0.0f);
+}
+
+/**
+ * Sets the correct aim for the bot to the target
+ */
+void AIPlayer::getMuzzleVector(U32 imageSlot,VectorF* vec)
+{
+   MatrixF mat;
+   getMuzzleTransform(imageSlot,&mat);
+
+   MountedImage& image = mMountedImageList[imageSlot];
+
+   if (image.dataBlock->correctMuzzleVector)
+   {
+      disableHeadZCalc();
+      if (getCorrectedAim(mat, vec))
+      {
+         enableHeadZCalc();
+         return;
+      }
+      enableHeadZCalc();
+
+   }
+   mat.getColumn(1,vec);
 }
 
 /**
@@ -582,7 +606,7 @@ bool AIPlayer::getAIMove(Move *movePtr)
    // Replicate the trigger state into the move so that
    // triggers can be controlled from scripts.
    for( U32 i = 0; i < MaxTriggerKeys; i++ )
-      movePtr->trigger[ i ] = mMoveTriggers[ i ];
+      movePtr->trigger[ i ] = getImageTriggerState( i );
 
 #ifdef TORQUE_NAVIGATION_ENABLED
    if(mJump == Now)
@@ -1019,9 +1043,9 @@ NavMesh *AIPlayer::findNavMesh() const
          }
          else
          {
-            if(getNavSize() == Small && !m->mSmallCharacters ||
-               getNavSize() == Regular && !m->mRegularCharacters ||
-               getNavSize() == Large && !m->mLargeCharacters)
+            if((getNavSize() == Small && !m->mSmallCharacters) ||
+               (getNavSize() == Regular && !m->mRegularCharacters) ||
+               (getNavSize() == Large && !m->mLargeCharacters))
                continue;
          }
          if(!mesh || m->getWorldBox().getVolume() < mesh->getWorldBox().getVolume())
@@ -1293,7 +1317,7 @@ bool AIPlayer::checkInLos(GameBase* target, bool _useMuzzle, bool _checkEnabled)
    return hit;
 }
 
-DefineEngineMethod(AIPlayer, checkInLos, bool, (ShapeBase* obj,  bool useMuzzle, bool checkEnabled),(NULL, false, false),
+DefineEngineMethod(AIPlayer, checkInLos, bool, (ShapeBase* obj,  bool useMuzzle, bool checkEnabled),(nullAsType<ShapeBase*>(), false, false),
    "@brief Check whether an object is in line of sight.\n"
    "@obj Object to check. (If blank, it will check the current target).\n"
    "@useMuzzle Use muzzle position. Otherwise use eye position. (defaults to false).\n"
@@ -1342,7 +1366,7 @@ bool AIPlayer::checkInFoV(GameBase* target, F32 camFov, bool _checkEnabled)
    return (dot > mCos(camFov));
 }
 
-DefineEngineMethod(AIPlayer, checkInFoV, bool, (ShapeBase* obj, F32 fov, bool checkEnabled), (NULL, 45.0f, false),
+DefineEngineMethod(AIPlayer, checkInFoV, bool, (ShapeBase* obj, F32 fov, bool checkEnabled), (nullAsType<ShapeBase*>(), 45.0f, false),
    "@brief Check whether an object is within a specified veiw cone.\n"
    "@obj Object to check. (If blank, it will check the current target).\n"
    "@fov view angle in degrees.(Defaults to 45)\n"
@@ -1416,10 +1440,9 @@ F32 AIPlayer::getTargetDistance(GameBase* target, bool _checkEnabled)
    return (getPosition() - target->getPosition()).len();
 }
 
-DefineEngineMethod(AIPlayer, getTargetDistance, bool, (ShapeBase* obj, bool checkEnabled), (NULL, false),
-   "@brief Check whether an object is within a specified veiw cone.\n"
+DefineEngineMethod(AIPlayer, getTargetDistance, F32, (ShapeBase* obj, bool checkEnabled), (nullAsType<ShapeBase*>(), false),
+   "@brief The distance to a given object.\n"
    "@obj Object to check. (If blank, it will check the current target).\n"
-   "@fov view angle in degrees.(Defaults to 45)\n"
    "@checkEnabled check whether the object can take damage and if so is still alive.(Defaults to false)\n")
 {
    return object->getTargetDistance(obj, checkEnabled);

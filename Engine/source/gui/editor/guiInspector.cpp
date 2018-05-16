@@ -29,6 +29,11 @@
 #include "gui/containers/guiScrollCtrl.h"
 #include "gui/editor/inspector/customField.h"
 
+#ifdef TORQUE_EXPERIMENTAL_EC
+#include "gui/editor/inspector/entityGroup.h"
+#include "gui/editor/inspector/mountingGroup.h"
+#include "gui/editor/inspector/componentGroup.h"
+#endif
 
 IMPLEMENT_CONOBJECT(GuiInspector);
 
@@ -584,6 +589,43 @@ void GuiInspector::refresh()
    mGroups.push_back(general);
    addObject(general);
 
+#ifdef TORQUE_EXPERIMENTAL_EC
+   //Entity inspector group
+   if (mTargets.first()->getClassRep()->isSubclassOf("Entity"))
+   {
+      GuiInspectorEntityGroup *components = new GuiInspectorEntityGroup("Components", this);
+      if (components != NULL)
+      {
+         components->registerObject();
+         mGroups.push_back(components);
+         addObject(components);
+      }
+
+      //Mounting group override
+      GuiInspectorGroup *mounting = new GuiInspectorMountingGroup("Mounting", this);
+      if (mounting != NULL)
+      {
+         mounting->registerObject();
+         mGroups.push_back(mounting);
+         addObject(mounting);
+      }
+   }
+
+   if (mTargets.first()->getClassRep()->isSubclassOf("Component"))
+   {
+      //Build the component field groups as the component describes it
+      Component* comp = dynamic_cast<Component*>(mTargets.first().getPointer());
+
+      if (comp->getComponentFieldCount() > 0)
+      {
+         GuiInspectorComponentGroup *compGroup = new GuiInspectorComponentGroup("Component Fields", this);
+         compGroup->registerObject();
+         mGroups.push_back(compGroup);
+         addObject(compGroup);
+      }
+   }
+#endif
+
    // Create the inspector groups for static fields.
 
    for( TargetVector::iterator iter = mTargets.begin(); iter != mTargets.end(); ++ iter )
@@ -879,15 +921,15 @@ DefineEngineMethod( GuiInspector, setObjectField, void, (const char* fieldname, 
 
 //-----------------------------------------------------------------------------
 
-DefineEngineMethod( GuiInspector, findByObject, S32, (SimObject* object), ,
+DefineEngineMethod( GuiInspector, findByObject, S32, (SimObject* obj), ,
 	"Returns the id of an awake inspector that is inspecting the passed object if one exists\n"
 	"@param object Object to find away inspector for."
 	"@return id of an awake inspector that is inspecting the passed object if one exists, else NULL or 0.")
 {
-   if ( !object )
+   if ( !obj)
       return NULL;
 
-   SimObject *inspector = GuiInspector::findByObject( object );
+   SimObject *inspector = GuiInspector::findByObject(obj);
 
    if ( !inspector )
       return NULL;

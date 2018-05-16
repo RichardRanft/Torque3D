@@ -606,6 +606,10 @@ class SimObject: public ConsoleObject, public TamlCallbacks
       /// Called when the object's name is changed.
       virtual void onNameChange(const char *name);
       
+      /// Called when the adding of the object to the sim is complete, all sub-objects have been processed as well
+      // This is a special-case function that only really gets used with Entities/BehaviorObjects.
+      virtual void onPostAdd() {}
+
       ///
       ///  Specifically, these are called by setDataField
       ///  when a static or dynamic field is modified, see
@@ -822,7 +826,7 @@ class SimObject: public ConsoleObject, public TamlCallbacks
       virtual bool readObject(Stream *stream);
       
       /// Set whether fields created at runtime should be saved. Default is true.
-      void setCanSaveDynamicFields( bool bCanSave ) { mCanSaveFieldDictionary	=	bCanSave; }
+      void setCanSaveDynamicFields( bool bCanSave ) { mCanSaveFieldDictionary =  bCanSave; }
       
       /// Get whether fields created at runtime should be saved. Default is true.
       bool getCanSaveDynamicFields( ) { return mCanSaveFieldDictionary;}

@@ -441,7 +441,7 @@ public:
    /// @see addGroup, endGroup
    /// @see addGroup, endGroup
    /// @see addDeprecatedField
-   enum ACRFieldTypes
+   enum ACRFieldTypes : U32
    {
       /// The first custom field type... all fields
       /// types greater or equal to this one are not
@@ -473,6 +473,8 @@ public:
    enum FieldFlags
    {
       FIELD_HideInInspectors     = BIT( 0 ),    ///< Do not show the field in inspectors.
+      FIELD_ComponentInspectors = BIT(1),       ///< Custom fields used by components. They are likely to be non-standard size/configuration, so 
+                                                ///< They are handled specially
    };
 
    struct Field

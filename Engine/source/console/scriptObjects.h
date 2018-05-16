@@ -60,9 +60,6 @@ class ScriptTickObject : public ScriptObject, public virtual ITickable
 
 protected:
    bool mCallOnAdvanceTime;
-   bool mUseTickRateMs;
-   int mTickRateMs;
-   F32 mAccumulator;
 
 public:
    ScriptTickObject();

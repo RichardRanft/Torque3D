@@ -56,10 +56,12 @@ protected:
 	bool mIsEnabled;
 	bool mIsSimulating;
 	bool mIsServer;
+   bool mIsSceneLocked;
 	U32 mTickCount;
 	ProcessList *mProcessList;
 	F32 mEditorTimeScale;
 	bool mErrorReport;
+   physx::PxRenderBuffer *mRenderBuffer;
 	physx::PxControllerManager* mControllerManager;
 	static Px3ConsoleStream *smErrorCallback;
 	static physx::PxDefaultAllocator smMemoryAlloc;
@@ -68,8 +70,6 @@ protected:
 	static physx::PxProfileZoneManager* smProfileZoneManager;
 	static physx::PxDefaultCpuDispatcher* smCpuDispatcher;
 	static physx::PxVisualDebuggerConnection* smPvdConnection;
-   static F32 smPhysicsStepTime;
-   static U32 smPhysicsMaxIterations;
 	F32 mAccumulator;
 	bool _simulate(const F32 dt);
 
@@ -96,11 +96,14 @@ public:
 	void releaseWriteLock();
 	bool isServer(){return mIsServer;}
 	physx::PxController* createController( physx::PxControllerDesc &desc );
+   void lockScene();
+   void unlockScene();
 	//static
 	static bool restartSDK( bool destroyOnly = false, Px3World *clientWorld = NULL, Px3World *serverWorld = NULL );
 	static void releaseWriteLocks();
 	static physx::PxCooking *getCooking();
-   static void setTiming(F32 stepTime,U32 maxIterations);
+   static void lockScenes();
+   static void unlockScenes();
 };
 
 #endif // _PX3WORLD_H_

@@ -145,6 +145,17 @@ DefineConsoleFunction(NavMeshUpdateAroundObject, void, (S32 objid, bool remove),
       obj->enableCollision();
 }
 
+
+DefineConsoleFunction(NavMeshIgnore, void, (S32 objid, bool _ignore), (0, true),
+   "@brief Flag this object as not generating a navmesh result.")
+{
+   SceneObject *obj;
+   if(!Sim::findObject(objid, obj))
+      return;
+
+      obj->mPathfindingIgnore = _ignore;
+}
+
 DefineConsoleFunction(NavMeshUpdateOne, void, (S32 meshid, S32 objid, bool remove), (0, 0, false),
    "@brief Update all tiles in a given NavMesh that intersect the given object's world box.")
 {
@@ -170,7 +181,7 @@ DefineConsoleFunction(NavMeshUpdateOne, void, (S32 meshid, S32 objid, bool remov
 NavMesh::NavMesh()
 {
    mTypeMask |= StaticShapeObjectType | MarkerObjectType;
-   mFileName = StringTable->insert("");
+   mFileName = StringTable->EmptyString();
    mNetFlags.clear(Ghostable);
 
    mSaveIntermediates = false;
@@ -200,7 +211,7 @@ NavMesh::NavMesh()
    mLargeCharacters = false;
    mVehicles = false;
 
-   mCoverSet = StringTable->insert("");
+   mCoverSet = StringTable->EmptyString();
    mInnerCover = false;
    mCoverDist = 1.0f;
    mPeekDist = 0.7f;
@@ -827,7 +838,7 @@ void NavMesh::buildNextTile()
          ctx->stopTimer(RC_TIMER_TOTAL);
          if(getEventManager())
          {
-            String str = String::ToString("%d %.3f", getId(), ctx->getAccumulatedTime(RC_TIMER_TOTAL) / 1000.0f);
+            String str = String::ToString("%d", getId());
             getEventManager()->postEvent("NavMeshUpdate", str.c_str());
             setMaskBits(LoadFlag);
          }
@@ -839,6 +850,7 @@ void NavMesh::buildNextTile()
 static void buildCallback(SceneObject* object,void *key)
 {
    SceneContainer::CallbackInfo* info = reinterpret_cast<SceneContainer::CallbackInfo*>(key);
+   if (!object->mPathfindingIgnore)
    object->buildPolyList(info->context,info->polyList,info->boundingBox,info->boundingSphere);
 }
 
@@ -861,7 +873,7 @@ unsigned char *NavMesh::buildTileData(const Tile &tile, TileData &data, U32 &dat
    data.geom.clear();
    info.polyList = &data.geom;
    info.key = this;
-   getContainer()->findObjects(box, StaticShapeObjectType | TerrainObjectType, buildCallback, &info);
+   getContainer()->findObjects(box, StaticObjectType | DynamicShapeObjectType, buildCallback, &info);
 
    // Parse water objects into the same list, but remember how much geometry was /not/ water.
    U32 nonWaterVertCount = data.geom.getVertCount();
@@ -1131,9 +1143,10 @@ void NavMesh::buildLinks()
       // Iterate over links
       for(U32 j = 0; j < mLinkIDs.size(); j++)
       {
+         if (mLinksUnsynced[j])
+         {
          if(tile.box.isContained(getLinkStart(j)) ||
-            tile.box.isContained(getLinkEnd(j)) &&
-            mLinksUnsynced[j])
+               tile.box.isContained(getLinkEnd(j)))
          {
             // Mark tile for build.
             mDirtyTiles.push_back_unique(i);
@@ -1147,6 +1160,7 @@ void NavMesh::buildLinks()
                mLinksUnsynced[j] = false;
          }
       }
+   }
    }
    if(mDirtyTiles.size())
       ctx->startTimer(RC_TIMER_TOTAL);
@@ -1581,18 +1595,19 @@ bool NavMesh::load()
    S32 s;
    file.read(sizeof(S32), (char*)&s);
    setLinkCount(s);
-   if(s > 0)
+   if (s > 0)
    {
       file.read(sizeof(F32) * s * 6, (char*)const_cast<F32*>(mLinkVerts.address()));
-      file.read(sizeof(F32) * s,     (char*)const_cast<F32*>(mLinkRads.address()));
-      file.read(sizeof(U8) * s,      (char*)const_cast<U8*>(mLinkDirs.address()));
-      file.read(sizeof(U8) * s,      (char*)const_cast<U8*>(mLinkAreas.address()));
-      file.read(sizeof(U16) * s,     (char*)const_cast<U16*>(mLinkFlags.address()));
-      file.read(sizeof(F32) * s,     (char*)const_cast<U32*>(mLinkIDs.address()));
-      mLinksUnsynced.fill(false);
-      mLinkSelectStates.fill(Unselected);
-      mDeleteLinks.fill(false);
+      file.read(sizeof(F32) * s, (char*)const_cast<F32*>(mLinkRads.address()));
+      file.read(sizeof(U8) * s, (char*)const_cast<U8*>(mLinkDirs.address()));
+      file.read(sizeof(U8) * s, (char*)const_cast<U8*>(mLinkAreas.address()));
+      file.read(sizeof(U16) * s, (char*)const_cast<U16*>(mLinkFlags.address()));
+      file.read(sizeof(F32) * s, (char*)const_cast<U32*>(mLinkIDs.address()));
    }
+   mLinksUnsynced.fill(false);
+   mLinkSelectStates.fill(Unselected);
+   mDeleteLinks.fill(false);
+
    file.close();
 
    updateTiles();
@@ -1657,12 +1672,15 @@ bool NavMesh::save()
 
    S32 s = mLinkIDs.size();
    file.write(sizeof(S32), (const char*)&s);
-   file.write(sizeof(F32) * s * 6, (const char*)mLinkVerts.address());
-   file.write(sizeof(F32) * s,     (const char*)mLinkRads.address());
-   file.write(sizeof(U8) * s,      (const char*)mLinkDirs.address());
-   file.write(sizeof(U8) * s,      (const char*)mLinkAreas.address());
-   file.write(sizeof(U16) * s,     (const char*)mLinkFlags.address());
-   file.write(sizeof(U32) * s,     (const char*)mLinkIDs.address());
+   if (s > 0)
+   {
+      file.write(sizeof(F32) * s * 6, (const char*)mLinkVerts.address());
+      file.write(sizeof(F32) * s,     (const char*)mLinkRads.address());
+      file.write(sizeof(U8) * s,      (const char*)mLinkDirs.address());
+      file.write(sizeof(U8) * s,      (const char*)mLinkAreas.address());
+      file.write(sizeof(U16) * s,     (const char*)mLinkFlags.address());
+      file.write(sizeof(U32) * s,     (const char*)mLinkIDs.address());
+   }
 
    file.close();
 

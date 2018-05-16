@@ -170,7 +170,7 @@ const char *NavPath::getProtectedFrom(void *obj, const char *data)
    if(object->mFromSet)
       return data;
    else
-      return StringTable->insert("");
+      return StringTable->EmptyString();
 }
 
 const char *NavPath::getProtectedTo(void *obj, const char *data)
@@ -180,7 +180,7 @@ const char *NavPath::getProtectedTo(void *obj, const char *data)
    if(object->mToSet)
       return data;
    else
-      return StringTable->insert("");
+      return StringTable->EmptyString();
 }
 
 IRangeValidator ValidIterations(1, S32_MAX);
@@ -224,7 +224,7 @@ void NavPath::initPersistFields()
    addField("allowDrop", TypeBool, Offset(mLinkTypes.drop, NavPath),
       "Allow the path to use drop links.");
    addField("allowSwim", TypeBool, Offset(mLinkTypes.swim, NavPath),
-      "Allow the path tomove in water.");
+      "Allow the path to move in water.");
    addField("allowLedge", TypeBool, Offset(mLinkTypes.ledge, NavPath),
       "Allow the path to jump ledges.");
    addField("allowClimb", TypeBool, Offset(mLinkTypes.climb, NavPath),

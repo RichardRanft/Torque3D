@@ -39,6 +39,7 @@
 #include "console/engineStructs.h"
 #endif
 
+template<typename T> inline const T nullAsType(){ return nullptr; }
 
 /// @file
 /// Legacy TS-based console type definitions.
@@ -124,6 +125,8 @@ DefineConsoleType( TypeColorI, ColorI )
 DefineConsoleType( TypeColorF, ColorF )
 DefineConsoleType( TypeSimObjectName, SimObject* )
 DefineConsoleType( TypeShader, GFXShader * )
+
+DefineConsoleType(TypeSimObjectPtr, SimObject*)
 
 /// A persistent reference to an object.  This reference indirectly goes
 /// through the referenced object's persistent ID.

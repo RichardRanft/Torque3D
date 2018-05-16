@@ -45,9 +45,6 @@
 // Debug Profiling.
 #include "platform/profiler.h"
 
-static U32 execDepth = 0;
-static U32 journalDepth = 1;
-
 //-----------------------------------------------------------------------------
 
 IMPLEMENT_CONOBJECT(ShapeAsset);
@@ -96,12 +93,10 @@ ConsoleSetType(TypeShapeAssetPtr)
 //-----------------------------------------------------------------------------
 
 ShapeAsset::ShapeAsset() :
-mAcquireReferenceCount(0),
 mpOwningAssetManager(NULL),
-mAssetInitialized(false)
+mAssetInitialized(false),
+mAcquireReferenceCount(0)
 {
-   // Generate an asset definition.
-   mpAssetDefinition = new AssetDefinition();
 }
 
 //-----------------------------------------------------------------------------
@@ -154,4 +149,8 @@ void ShapeAsset::copyTo(SimObject* object)
 {
    // Call to parent.
    Parent::copyTo(object);
+}
+
+void ShapeAsset::onAssetRefresh(void)
+{
 }

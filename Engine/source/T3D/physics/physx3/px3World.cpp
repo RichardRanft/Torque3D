@@ -50,9 +50,6 @@ physx::PxDefaultCpuDispatcher* Px3World::smCpuDispatcher=NULL;
 Px3ConsoleStream* Px3World::smErrorCallback = NULL;
 physx::PxVisualDebuggerConnection* Px3World::smPvdConnection=NULL;
 physx::PxDefaultAllocator Px3World::smMemoryAlloc;
-//Physics timing
-F32 Px3World::smPhysicsStepTime = 1.0f/(F32)TickMs;
-U32 Px3World::smPhysicsMaxIterations = 4;
 
 Px3World::Px3World(): mScene( NULL ),
    mProcessList( NULL ),
@@ -62,7 +59,9 @@ Px3World::Px3World(): mScene( NULL ),
    mIsEnabled( false ),
    mEditorTimeScale( 1.0f ),
    mAccumulator( 0 ),
-   mControllerManager( NULL )
+   mControllerManager(NULL),
+   mIsSceneLocked(false),
+   mRenderBuffer(NULL)
 {
 }
 
@@ -73,12 +72,6 @@ Px3World::~Px3World()
 physx::PxCooking *Px3World::getCooking()
 {
 	return smCooking;
-}
-
-void Px3World::setTiming(F32 stepTime,U32 maxIterations)
-{
-   smPhysicsStepTime = stepTime;
-   smPhysicsMaxIterations = maxIterations;
 }
 
 bool Px3World::restartSDK( bool destroyOnly, Px3World *clientWorld, Px3World *serverWorld)
@@ -176,6 +169,8 @@ void Px3World::destroyWorld()
 {
 	getPhysicsResults();
 
+   mRenderBuffer = NULL;
+
 	// Release the tick processing signals.
 	if ( mProcessList )
 	{
@@ -222,13 +217,14 @@ bool Px3World::initWorld( bool isServer, ProcessList *processList )
       sceneDesc.cpuDispatcher = smCpuDispatcher;
       Con::printf("PhysX3 using Cpu: %d workers", smCpuDispatcher->getWorkerCount());
    }
-
  	
    sceneDesc.flags |= physx::PxSceneFlag::eENABLE_CCD;
    sceneDesc.flags |= physx::PxSceneFlag::eENABLE_ACTIVETRANSFORMS;
    sceneDesc.filterShader  = physx::PxDefaultSimulationFilterShader;
 
 	mScene = gPhysics3SDK->createScene(sceneDesc);
+   //cache renderbuffer for use with debug drawing
+   mRenderBuffer = const_cast<physx::PxRenderBuffer*>(&mScene->getRenderBuffer());
 
 	physx::PxDominanceGroupPair debrisDominance( 0.0f, 1.0f );
 	mScene->setDominanceGroupPair(0,31,debrisDominance);
@@ -245,20 +241,20 @@ bool Px3World::initWorld( bool isServer, ProcessList *processList )
 // Most of this borrowed from bullet physics library, see btDiscreteDynamicsWorld.cpp
 bool Px3World::_simulate(const F32 dt)
 {
-   int numSimulationSubSteps = 0;
+   S32 numSimulationSubSteps = 0;
    //fixed timestep with interpolation
    mAccumulator += dt;
    if (mAccumulator >= smPhysicsStepTime)
    {
-      numSimulationSubSteps = int(mAccumulator / smPhysicsStepTime);
+      numSimulationSubSteps = S32(mAccumulator / smPhysicsStepTime);
       mAccumulator -= numSimulationSubSteps * smPhysicsStepTime;
    }
 	if (numSimulationSubSteps)
 	{
 		//clamp the number of substeps, to prevent simulation grinding spiralling down to a halt
-		int clampedSimulationSteps = (numSimulationSubSteps > smPhysicsMaxIterations)? smPhysicsMaxIterations : numSimulationSubSteps;
+		S32 clampedSimulationSteps = (numSimulationSubSteps > smPhysicsMaxSubSteps)? smPhysicsMaxSubSteps : numSimulationSubSteps;
 		
-		for (int i=0;i<clampedSimulationSteps;i++)
+		for (S32 i=0;i<clampedSimulationSteps;i++)
 		{
 			mScene->fetchResults(true);
 			mScene->simulate(smPhysicsStepTime);
@@ -333,6 +329,62 @@ void Px3World::releaseWriteLock()
 	// simulation hasn't really ticked!
 	mScene->checkResults( true );
 	//AssertFatal( mScene->isWritable(), "PhysX3World::releaseWriteLock() - We should have been writable now!" );
+}
+
+void Px3World::lockScenes()
+{
+   Px3World *world = dynamic_cast<Px3World*>(PHYSICSMGR->getWorld("server"));
+
+   if (world)
+      world->lockScene();
+
+   world = dynamic_cast<Px3World*>(PHYSICSMGR->getWorld("client"));
+
+   if (world)
+      world->lockScene();
+}
+
+void Px3World::unlockScenes()
+{
+   Px3World *world = dynamic_cast<Px3World*>(PHYSICSMGR->getWorld("server"));
+
+   if (world)
+      world->unlockScene();
+
+   world = dynamic_cast<Px3World*>(PHYSICSMGR->getWorld("client"));
+
+   if (world)
+      world->unlockScene();
+}
+
+void Px3World::lockScene()
+{
+   if (!mScene)
+      return;
+
+   if (mIsSceneLocked)
+   {
+      Con::printf("Px3World: Attempting to lock a scene that is already locked.");
+      return;
+   }
+
+   mScene->lockWrite();
+   mIsSceneLocked = true;
+}
+
+void Px3World::unlockScene()
+{
+   if (!mScene)
+      return;
+
+   if (!mIsSceneLocked)
+   {
+      Con::printf("Px3World: Attempting to unlock a scene that is not locked.");
+      return;
+   }
+
+   mScene->unlockWrite();
+   mIsSceneLocked = false;
 }
 
 bool Px3World::castRay( const Point3F &startPnt, const Point3F &endPnt, RayInfo *ri, const Point3F &impulse )
@@ -491,22 +543,17 @@ static ColorI getDebugColor( physx::PxU32 packed )
 
 void Px3World::onDebugDraw( const SceneRenderState *state )
 {
-   if ( !mScene )
+   if ( !mScene || !mRenderBuffer )
       return;
 
    mScene->setVisualizationParameter(physx::PxVisualizationParameter::eSCALE,1.0f);
    mScene->setVisualizationParameter(physx::PxVisualizationParameter::eBODY_AXES,1.0f);
    mScene->setVisualizationParameter(physx::PxVisualizationParameter::eCOLLISION_SHAPES,1.0f);
 
-   const physx::PxRenderBuffer *renderBuffer = &mScene->getRenderBuffer();
-
-   if(!renderBuffer)
-      return;
-
    // Render points
    {
-      physx::PxU32 numPoints = renderBuffer->getNbPoints();
-      const physx::PxDebugPoint *points = renderBuffer->getPoints();
+      physx::PxU32 numPoints = mRenderBuffer->getNbPoints();
+      const physx::PxDebugPoint *points = mRenderBuffer->getPoints();
 
       PrimBuild::begin( GFXPointList, numPoints );
       
@@ -522,8 +569,8 @@ void Px3World::onDebugDraw( const SceneRenderState *state )
 
    // Render lines
    {
-      physx::PxU32 numLines = renderBuffer->getNbLines();
-      const physx::PxDebugLine *lines = renderBuffer->getLines();
+      physx::PxU32 numLines = mRenderBuffer->getNbLines();
+      const physx::PxDebugLine *lines = mRenderBuffer->getLines();
 
       PrimBuild::begin( GFXLineList, numLines * 2 );
 
@@ -541,8 +588,8 @@ void Px3World::onDebugDraw( const SceneRenderState *state )
 
    // Render triangles
    {
-      physx::PxU32 numTris = renderBuffer->getNbTriangles();
-      const physx::PxDebugTriangle *triangles = renderBuffer->getTriangles();
+      physx::PxU32 numTris = mRenderBuffer->getNbTriangles();
+      const physx::PxDebugTriangle *triangles = mRenderBuffer->getTriangles();
 
       PrimBuild::begin( GFXTriangleList, numTris * 3 );
       
@@ -560,9 +607,4 @@ void Px3World::onDebugDraw( const SceneRenderState *state )
       PrimBuild::end();
    }
 
-}
-//set simulation timing via script
-DefineEngineFunction( physx3SetSimulationTiming, void, ( F32 stepTime, U32 maxSteps ),, "Set simulation timing of the PhysX 3 plugin" )
-{
-   Px3World::setTiming(stepTime,maxSteps);
 }
